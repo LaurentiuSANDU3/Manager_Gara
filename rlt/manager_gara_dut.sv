@@ -278,5 +278,76 @@ always @(posedge pclk or negedge presetn) begin
         endcase
     end
 end
+
+
+// status tren 0 
+always @(posedge pclk or negedge presetn) begin
+    if (~presetn) begin
+        status_tren0 <= 5'b0;
+    end else begin
+        case (state)
+            ST_IDLE: begin
+                if (cerere_noua && cale_libera && id_tren == 2'd0) 
+                    status_tren0 <= {1'b1, peron_selectat, 1'b1};
+            end
+            ST_DEPART: begin
+                if (out_valid && out_ready && tren_activ_id == 2'd0) 
+                    status_tren0 <= 5'b0;
+            end
+        endcase
+    end
+end
+//status tren1
+always @(posedge pclk or negedge presetn) begin
+    if (~presetn) begin
+        status_tren1 <= 5'b0;
+    end else begin
+        case (state)
+            ST_IDLE: begin
+                if (cerere_noua && cale_libera && id_tren == 2'd0) 
+                    status_tren0 <= {1'b1, peron_selectat, 1'b1};
+            end
+            ST_DEPART: begin
+                if (out_valid && out_ready && tren_activ_id == 2'd0) 
+                    status_tren0 <= 5'b0;
+            end
+        endcase
+    end
+end
+
+// status tren2
+always @(posedge pclk or negedge presetn) begin
+    if (~presetn) begin
+        status_tren2 <= 5'b0;
+    end else begin
+        case (state)
+            ST_IDLE: begin
+                if (cerere_noua && cale_libera && id_tren == 2'd0) 
+                    status_tren0 <= {1'b1, peron_selectat, 1'b1};
+            end
+            ST_DEPART: begin
+                if (out_valid && out_ready && tren_activ_id == 2'd0) 
+                    status_tren0 <= 5'b0;
+            end
+        endcase
+    end
+end
+// status tren3
+always @(posedge pclk or negedge presetn) begin
+    if (~presetn) begin
+        status_tren3 <= 5'b0;
+    end else begin
+        case (state)
+            ST_IDLE: begin
+                if (cerere_noua && cale_libera && id_tren == 2'd0) 
+                    status_tren0 <= {1'b1, peron_selectat, 1'b1};
+            end
+            ST_DEPART: begin
+                if (out_valid && out_ready && tren_activ_id == 2'd0) 
+                    status_tren0 <= 5'b0;
+            end
+        endcase
+    end
+end
 // implementare Round Robin
 endmodule
