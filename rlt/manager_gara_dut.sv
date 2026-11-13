@@ -25,7 +25,8 @@ module manager_gara_dut (
  
     // ---------------- interfata trenuri ----------------
     input   wire [6-1:0]      cai_ferate_in_lucru, // 1 = cale in lucru
-    input   wire [6-1:0]      cereri_trenuri,      // cate un bit per cale
+    input   wire [6-1:0]      cereri_trenuri,
+         // cate un bit per cale
     input   wire [3-1:0]      tren0,
     input   wire [3-1:0]      tren1,
     input   wire [3-1:0]      tren2,
@@ -33,7 +34,7 @@ module manager_gara_dut (
     output  reg  [6-1:0]      semafor_iesire,      // 1 verde | 0 rosu
     output  reg  [6-1:0]      semafor_intrare,     // 1 verde | 0 rosu
     output  reg  [3-1:0]      peron_alocat,
-    output  wire              comanda_acceptata
+    output  reg  [8-1:0]      comanda_acceptata
 );
  
 localparam [4-1:0] ADR_STATUS_TREN0     = 4'h0;
@@ -55,7 +56,8 @@ reg [5-1:0] status_tren0;    // RO: [4] BUSY, [3:1] COD_PERON, [0] COMANDA_ACCEP
 reg [5-1:0] status_tren1;    // RO
 reg [5-1:0] status_tren2;    // RO
 reg [5-1:0] status_tren3;    // RO
-reg [9-1:0] cmd_cerere;      // RW: [8:5] NR_VAGOANE, [4:2] COD_INCARCATURA, [1:0] ID_TREN
+reg [8-1:0] cmd_cerere;      // RW:  [4:2] COD_INCARCATURA, [1:0] ID_TREN
+reg [8-1:0] cmd_cerere_vagon;// [3:0]
 reg [8-1:0] durata_vagon_A;  // RW
 reg [8-1:0] durata_vagon_B;  // RW
 reg [8-1:0] durata_vagon_C;  // RW
@@ -65,10 +67,11 @@ reg [8-1:0] durata_vagon_C;  // RW
 wire apb_access = psel & penable;
 assign pready = 1'b1;
 
-
-always @(*) begin
+//citire
+always @(posedge pclk or negedge presetns) begin
+    if(~presetn)
     prdata = 16'b0;
-    if (psel && ~pwrite) begin
+    else if (psel && ~penable && ~pwrite) begin // se rapunde cu date in al doilea tat al tranzactiei, verificand cand apare primul tact al tranzactiei
         case (paddr)
             ADR_STATUS_TREN0:   prdata = {11'b0, status_tren0};
             ADR_STATUS_TREN1:   prdata = {11'b0, status_tren1};
@@ -133,7 +136,7 @@ assign peron_liber[4] = (semafor_intrare[4] == 1'b1 && semafor_iesire[4] == 1'b0
 assign peron_liber[5] = (semafor_intrare[5] == 1'b1 && semafor_iesire[5] == 1'b0) ? 1'b1 : 1'b0;
 
 wire [6-1:0] cai_eligibile = cai_permise & ~cai_ferate_in_lucru & peron_liber;
-wire         cale_libera   = |cai_eligibile;
+wire         cale_libera   = |cai_eligibile; 
 
 
 reg [3-1:0] peron_selectat; 
@@ -149,9 +152,10 @@ always @(*) begin
     else                               peron_selectat = 3'd7; // 7 înseamnă "niciun peron găsit" / Eroare
 end
 
+always @(posedge pclk or negedge presetn) begin
+ comanda_acceptata = cale_libera; // 
 
-assign comanda_acceptata = cale_libera;
-
+end 
 wire cerere_noua = (apb_access && pwrite && (paddr == ADR_CMD_CERERE));
 
 reg [12-1:0] timp_stationare_total; // 4 biti(vagoane) * 8 biti(durata) = max 12 biti
