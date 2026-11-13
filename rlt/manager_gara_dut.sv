@@ -70,7 +70,6 @@ always @(posedge pclk or negedge presetn) begin
         prdata <= 16'b0;                          
     else if (psel && ~penable && ~pwrite) begin
         case (paddr)
-        
             ADR_STATUS_TREN0:     prdata <= {8'b0, status_tren0};
             ADR_STATUS_TREN1:     prdata <= {8'b0, status_tren1};
             ADR_STATUS_TREN2:     prdata <= {8'b0, status_tren2};
@@ -111,7 +110,6 @@ wire [2-1:0] id_tren         = cmd_cerere[1:0];
 wire [3-1:0] cod_incarcatura = cmd_cerere[4:2];
 wire [4-1:0] nr_vagoane      = cmd_cerere_vagon[3:0];   // MODIFICAT: nu mai e cmd_cerere[8:5]
 
-
 wire cerere_scrisa = apb_access && pwrite && (paddr == ADR_CMD_CERERE);
 reg  cerere_noua;
 always @(posedge pclk or negedge presetn) begin
@@ -141,15 +139,72 @@ assign peron_liber[5] = (semafor_intrare[5] == 1'b1 && semafor_iesire[5] == 1'b0
 wire [6-1:0] cai_eligibile = cai_permise & ~cai_ferate_in_lucru & peron_liber;
 wire         cale_libera   = |cai_eligibile;
 
+// ---------------- LOGICA ROUND ROBIN PENTRU SELECTIA PERONULUI ----------------
+reg [2:0] rr_ptr;
+
+always @(posedge pclk or negedge presetn) begin
+    if (~presetn) begin
+        rr_ptr <= 3'd0;
+    end else if (state == ST_IDLE && cerere_noua && cale_libera) begin
+        if (peron_selectat == 3'd5)
+            rr_ptr <= 3'd0;
+        else
+            rr_ptr <= peron_selectat + 3'd1;
+    end
+end
+
 reg [3-1:0] peron_selectat;
 always @(*) begin
-    if      (cai_eligibile[0] == 1'b1) peron_selectat = 3'd0;
-    else if (cai_eligibile[1] == 1'b1) peron_selectat = 3'd1;
-    else if (cai_eligibile[2] == 1'b1) peron_selectat = 3'd2;
-    else if (cai_eligibile[3] == 1'b1) peron_selectat = 3'd3;
-    else if (cai_eligibile[4] == 1'b1) peron_selectat = 3'd4;
-    else if (cai_eligibile[5] == 1'b1) peron_selectat = 3'd5;
-    else                               peron_selectat = 3'd7; // 7 = niciun peron gasit / eroare
+    peron_selectat = 3'd7; 
+    
+    if (rr_ptr == 3'd0) begin
+        if      (cai_eligibile[0]) peron_selectat = 3'd0;
+        else if (cai_eligibile[1]) peron_selectat = 3'd1;
+        else if (cai_eligibile[2]) peron_selectat = 3'd2;
+        else if (cai_eligibile[3]) peron_selectat = 3'd3;
+        else if (cai_eligibile[4]) peron_selectat = 3'd4;
+        else if (cai_eligibile[5]) peron_selectat = 3'd5;
+    end
+    else if (rr_ptr == 3'd1) begin
+        if      (cai_eligibile[1]) peron_selectat = 3'd1;
+        else if (cai_eligibile[2]) peron_selectat = 3'd2;
+        else if (cai_eligibile[3]) peron_selectat = 3'd3;
+        else if (cai_eligibile[4]) peron_selectat = 3'd4;
+        else if (cai_eligibile[5]) peron_selectat = 3'd5;
+        else if (cai_eligibile[0]) peron_selectat = 3'd0;
+    end
+    else if (rr_ptr == 3'd2) begin
+        if      (cai_eligibile[2]) peron_selectat = 3'd2;
+        else if (cai_eligibile[3]) peron_selectat = 3'd3;
+        else if (cai_eligibile[4]) peron_selectat = 3'd4;
+        else if (cai_eligibile[5]) peron_selectat = 3'd5;
+        else if (cai_eligibile[0]) peron_selectat = 3'd0;
+        else if (cai_eligibile[1]) peron_selectat = 3'd1;
+    end
+    else if (rr_ptr == 3'd3) begin
+        if      (cai_eligibile[3]) peron_selectat = 3'd3;
+        else if (cai_eligibile[4]) peron_selectat = 3'd4;
+        else if (cai_eligibile[5]) peron_selectat = 3'd5;
+        else if (cai_eligibile[0]) peron_selectat = 3'd0;
+        else if (cai_eligibile[1]) peron_selectat = 3'd1;
+        else if (cai_eligibile[2]) peron_selectat = 3'd2;
+    end
+    else if (rr_ptr == 3'd4) begin
+        if      (cai_eligibile[4]) peron_selectat = 3'd4;
+        else if (cai_eligibile[5]) peron_selectat = 3'd5;
+        else if (cai_eligibile[0]) peron_selectat = 3'd0;
+        else if (cai_eligibile[1]) peron_selectat = 3'd1;
+        else if (cai_eligibile[2]) peron_selectat = 3'd2;
+        else if (cai_eligibile[3]) peron_selectat = 3'd3;
+    end
+    else if (rr_ptr == 3'd5) begin
+        if      (cai_eligibile[5]) peron_selectat = 3'd5;
+        else if (cai_eligibile[0]) peron_selectat = 3'd0;
+        else if (cai_eligibile[1]) peron_selectat = 3'd1;
+        else if (cai_eligibile[2]) peron_selectat = 3'd2;
+        else if (cai_eligibile[3]) peron_selectat = 3'd3;
+        else if (cai_eligibile[4]) peron_selectat = 3'd4;
+    end
 end
 
 // timp de stationare = nr_vagoane * durata per vagon
@@ -202,6 +257,7 @@ always @(posedge pclk or negedge presetn) begin
         endcase
     end
 end
+
 // peron activ
 always @(posedge pclk or negedge presetn) begin
     if (~presetn) peron_alocat <= 3'd0;
@@ -237,6 +293,7 @@ always @(posedge pclk or negedge presetn) begin
         endcase
     end
 end
+
 always @(posedge pclk or negedge presetn) begin
     if (~presetn) begin
         out_data <= 5'b0;
@@ -264,6 +321,7 @@ always @(posedge pclk or negedge presetn) begin
         endcase
     end
 end
+
 always @(posedge pclk or negedge presetn) begin
     if (~presetn) begin
         semafor_iesire <= 6'b000000; // 0 = Oprit
@@ -280,74 +338,78 @@ always @(posedge pclk or negedge presetn) begin
 end
 
 
+// ---------------- STATUS TRENURI COREECTAT ----------------
+
 // status tren 0 
 always @(posedge pclk or negedge presetn) begin
     if (~presetn) begin
-        status_tren0 <= 5'b0;
+        status_tren0 <= 8'b0;
     end else begin
         case (state)
             ST_IDLE: begin
                 if (cerere_noua && cale_libera && id_tren == 2'd0) 
-                    status_tren0 <= {1'b1, peron_selectat, 1'b1};
+                    status_tren0 <= {3'b000, 1'b1, peron_selectat, 1'b1};
             end
             ST_DEPART: begin
                 if (out_valid && out_ready && tren_activ_id == 2'd0) 
-                    status_tren0 <= 5'b0;
-            end
-        endcase
-    end
-end
-//status tren1
-always @(posedge pclk or negedge presetn) begin
-    if (~presetn) begin
-        status_tren1 <= 5'b0;
-    end else begin
-        case (state)
-            ST_IDLE: begin
-                if (cerere_noua && cale_libera && id_tren == 2'd0) 
-                    status_tren0 <= {1'b1, peron_selectat, 1'b1};
-            end
-            ST_DEPART: begin
-                if (out_valid && out_ready && tren_activ_id == 2'd0) 
-                    status_tren0 <= 5'b0;
+                    status_tren0 <= 8'b0;
             end
         endcase
     end
 end
 
-// status tren2
+// status tren 1
 always @(posedge pclk or negedge presetn) begin
     if (~presetn) begin
-        status_tren2 <= 5'b0;
+        status_tren1 <= 8'b0;
     end else begin
         case (state)
             ST_IDLE: begin
-                if (cerere_noua && cale_libera && id_tren == 2'd0) 
-                    status_tren0 <= {1'b1, peron_selectat, 1'b1};
+                if (cerere_noua && cale_libera && id_tren == 2'd1) 
+                    status_tren1 <= {3'b000, 1'b1, peron_selectat, 1'b1};
             end
             ST_DEPART: begin
-                if (out_valid && out_ready && tren_activ_id == 2'd0) 
-                    status_tren0 <= 5'b0;
+                if (out_valid && out_ready && tren_activ_id == 2'd1) 
+                    status_tren1 <= 8'b0;
             end
         endcase
     end
 end
-// status tren3
+
+// status tren 2
 always @(posedge pclk or negedge presetn) begin
     if (~presetn) begin
-        status_tren3 <= 5'b0;
+        status_tren2 <= 8'b0;
     end else begin
         case (state)
             ST_IDLE: begin
-                if (cerere_noua && cale_libera && id_tren == 2'd0) 
-                    status_tren0 <= {1'b1, peron_selectat, 1'b1};
+                if (cerere_noua && cale_libera && id_tren == 2'd2) 
+                    status_tren2 <= {3'b000, 1'b1, peron_selectat, 1'b1};
             end
             ST_DEPART: begin
-                if (out_valid && out_ready && tren_activ_id == 2'd0) 
-                    status_tren0 <= 5'b0;
+                if (out_valid && out_ready && tren_activ_id == 2'd2) 
+                    status_tren2 <= 8'b0;
             end
         endcase
     end
 end
-// implementare Round Robin
+
+// status tren 3
+always @(posedge pclk or negedge presetn) begin
+    if (~presetn) begin
+        status_tren3 <= 8'b0;
+    end else begin
+        case (state)
+            ST_IDLE: begin
+                if (cerere_noua && cale_libera && id_tren == 2'd3) 
+                    status_tren3 <= {3'b000, 1'b1, peron_selectat, 1'b1};
+            end
+            ST_DEPART: begin
+                if (out_valid && out_ready && tren_activ_id == 2'd3) 
+                    status_tren3 <= 8'b0;
+            end
+        endcase
+    end
+end
+
 endmodule
